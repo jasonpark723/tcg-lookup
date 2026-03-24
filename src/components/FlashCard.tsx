@@ -25,12 +25,11 @@ export function FlashCard({
   const [isFlipped, setIsFlipped] = useState(false)
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null)
   const [isAnimating, setIsAnimating] = useState(false)
-  const [waitingForCard, setWaitingForCard] = useState(false)
   const touchStartX = useRef<number | null>(null)
   const isAnimatingRef = useRef(false)
   const onNextRef = useRef(onNext)
   const onPreviousRef = useRef(onPrevious)
-  const lastCardId = useRef(card.id)
+  const pendingCallback = useRef<(() => void) | null>(null)
 
   // Keep refs in sync
   onNextRef.current = onNext
@@ -39,13 +38,13 @@ export function FlashCard({
 
   // Detect when card changes and finish the animation
   useEffect(() => {
-    if (waitingForCard && card.id !== lastCardId.current) {
-      lastCardId.current = card.id
-      setWaitingForCard(false)
+    if (swipeDirection && pendingCallback.current === null) {
+      // Card has changed, clear the swipe
+      setSwipeDirection(null)
       setIsAnimating(false)
       isAnimatingRef.current = false
     }
-  }, [card.id, waitingForCard])
+  }, [currentIndex])
 
   const handleFlip = () => {
     if (!isAnimating) {
@@ -59,11 +58,13 @@ export function FlashCard({
     isAnimatingRef.current = true
     setIsFlipped(false) // Reset flip immediately so next card appears unflipped
     setSwipeDirection(direction)
+    pendingCallback.current = callback || null
 
     setTimeout(() => {
-      setSwipeDirection(null)
-      setWaitingForCard(true)
-      callback?.()
+      // Call the callback to change the card
+      const cb = pendingCallback.current
+      pendingCallback.current = null
+      cb?.()
     }, 200)
   }
 
@@ -142,7 +143,7 @@ export function FlashCard({
         onTouchEnd={handleTouchEnd}
         style={{
           transform: getSwipeTransform(),
-          opacity: (swipeDirection || waitingForCard) ? 0 : 1,
+          opacity: swipeDirection ? 0 : 1,
           transition: swipeDirection ? 'transform 0.2s ease-out, opacity 0.2s ease-out' : 'none'
         }}
       >
