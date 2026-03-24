@@ -25,15 +25,27 @@ export function FlashCard({
   const [isFlipped, setIsFlipped] = useState(false)
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null)
   const [isAnimating, setIsAnimating] = useState(false)
+  const [waitingForCard, setWaitingForCard] = useState(false)
   const touchStartX = useRef<number | null>(null)
   const isAnimatingRef = useRef(false)
   const onNextRef = useRef(onNext)
   const onPreviousRef = useRef(onPrevious)
+  const lastCardId = useRef(card.id)
 
   // Keep refs in sync
   onNextRef.current = onNext
   onPreviousRef.current = onPrevious
   isAnimatingRef.current = isAnimating
+
+  // Detect when card changes and finish the animation
+  useEffect(() => {
+    if (waitingForCard && card.id !== lastCardId.current) {
+      lastCardId.current = card.id
+      setWaitingForCard(false)
+      setIsAnimating(false)
+      isAnimatingRef.current = false
+    }
+  }, [card.id, waitingForCard])
 
   const handleFlip = () => {
     if (!isAnimating) {
@@ -50,9 +62,8 @@ export function FlashCard({
 
     setTimeout(() => {
       setSwipeDirection(null)
+      setWaitingForCard(true)
       callback?.()
-      setIsAnimating(false)
-      isAnimatingRef.current = false
     }, 200)
   }
 
@@ -131,7 +142,7 @@ export function FlashCard({
         onTouchEnd={handleTouchEnd}
         style={{
           transform: getSwipeTransform(),
-          opacity: swipeDirection ? 0 : 1,
+          opacity: (swipeDirection || waitingForCard) ? 0 : 1,
           transition: swipeDirection ? 'transform 0.2s ease-out, opacity 0.2s ease-out' : 'none'
         }}
       >
