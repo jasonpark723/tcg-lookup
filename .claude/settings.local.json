@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:tcgtracking.com)",
+      "Bash(npm create:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run sync:*)",
+      "Bash(npx tsx:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npm run dev:*)",
+      "Bash(curl:*)",
+      "Bash(for id in 24653 24551 24406 24285)",
+      "Bash(do curl -s \"https://tcgtracking.com/tcgapi/v1/85/sets/$id\")",
+      "Bash(done)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}
