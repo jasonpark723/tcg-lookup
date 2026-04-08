@@ -2,8 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { GameSelector } from '../components/GameSelector'
 import { SetSelector } from '../components/SetSelector'
 import { FlashCard } from '../components/FlashCard'
-import { MultiSelect } from '../components/MultiSelect'
+import { CardGrid } from '../components/CardGrid'
+import { RarityChips } from '../components/RarityChips'
 import { fetchCardsWithPricing, CATEGORY_POKEMON_JP, CATEGORY_ONE_PIECE, type TCGSet, type Card } from '../lib/api'
+
+type ViewMode = 'flashcard' | 'grid'
 
 function shuffleArray<T>(array: T[]): T[] {
   const result = [...array]
@@ -47,7 +50,7 @@ const RARITY_ORDERS: Record<number, Record<string, number>> = {
 
 // Default excluded rarities by category
 const DEFAULT_EXCLUDED_RARITIES: Record<number, string[]> = {
-  [CATEGORY_POKEMON_JP]: ['Common', 'Uncommon', 'Rare'],
+  [CATEGORY_POKEMON_JP]: ['Common', 'Uncommon', 'Rare', 'Double Rare'],
   [CATEGORY_ONE_PIECE]: ['C', 'UC', 'R'],
 }
 
@@ -70,7 +73,7 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
 
 export function Study() {
   const [categoryId, setCategoryId] = useState(CATEGORY_POKEMON_JP)
-  const [selectedSet, setSelectedSet] = useState<TCGSet | null>(null)
+  const [selectedSets, setSelectedSets] = useState<TCGSet[]>([])
   const [allCards, setAllCards] = useState<Card[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -87,23 +90,33 @@ export function Study() {
   // Shuffle state - stores the order as array of indices
   const [shuffledOrder, setShuffledOrder] = useState<number[] | null>(null)
 
+  // View mode state
+  const [viewMode, setViewMode] = useState<ViewMode>('grid')
+
   useEffect(() => {
-    if (!selectedSet) {
+    if (selectedSets.length === 0) {
+      setAllCards([])
       return
     }
 
-    const setId = selectedSet.id
     let cancelled = false
 
     async function loadCards() {
       setLoading(true)
       setError(null)
       try {
-        const cardList = await fetchCardsWithPricing(setId, categoryId)
+        // Fetch cards from all selected sets in parallel
+        const cardPromises = selectedSets.map(set => fetchCardsWithPricing(set.id, categoryId))
+        const cardLists = await Promise.all(cardPromises)
         if (cancelled) return
+
+        // Combine all cards, adding set name to each
+        const cardList = cardLists.flatMap((cards, index) =>
+          cards.map(card => ({ ...card, set_name: selectedSets[index].name }))
+        )
         setAllCards(cardList)
         setCurrentIndex(0)
-        // Reset filters when set changes - select all rarities except defaults for this game
+        // Reset filters when sets change - select all rarities except defaults for this game
         const excludeByDefault = DEFAULT_EXCLUDED_RARITIES[categoryId] || []
         const rarities = new Set<string>()
         for (const card of cardList) {
@@ -129,7 +142,7 @@ export function Study() {
     return () => {
       cancelled = true
     }
-  }, [selectedSet, categoryId])
+  }, [selectedSets, categoryId])
 
   // Get unique rarities from cards, sorted by rarity order
   const availableRarities = useMemo(() => {
@@ -203,9 +216,9 @@ export function Study() {
     setCurrentIndex(0)
   }
 
-  const handleSetSelect = (set: TCGSet | null) => {
-    setSelectedSet(set)
-    if (!set) {
+  const handleSetSelect = (sets: TCGSet[]) => {
+    setSelectedSets(sets)
+    if (sets.length === 0) {
       setAllCards([])
       setCurrentIndex(0)
     }
@@ -213,7 +226,7 @@ export function Study() {
 
   const handleGameChange = (newCategoryId: number) => {
     setCategoryId(newCategoryId)
-    setSelectedSet(null)
+    setSelectedSets([])
     setAllCards([])
     setCurrentIndex(0)
     setSelectedRarities(new Set())
@@ -263,7 +276,7 @@ export function Study() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className={`mx-auto px-4 py-8 ${viewMode === 'grid' ? 'max-w-[1800px]' : 'max-w-4xl'}`}>
         <h1 className="text-2xl font-bold text-center mb-2">
           TCG Crash Course
         </h1>
@@ -279,22 +292,21 @@ export function Study() {
         {/* Set selector */}
         <div className="flex justify-center mb-6">
           <SetSelector
-            selectedId={selectedSet?.id}
+            selectedIds={new Set(selectedSets.map(s => s.id))}
             onSelect={handleSetSelect}
             categoryId={categoryId}
           />
         </div>
 
-        {selectedSet && (
+        {selectedSets.length > 0 && (
           <>
             {/* Filters */}
-            <div className="flex flex-wrap justify-center gap-4 mb-6">
+            <div className="flex flex-col items-center gap-4 mb-6">
               {/* Rarity filter */}
-              <MultiSelect
+              <RarityChips
                 options={availableRarities}
                 selected={selectedRarities}
                 onChange={handleRarityChange}
-                placeholder="All Rarities"
               />
 
               {/* Price filters */}
@@ -322,7 +334,7 @@ export function Study() {
             </div>
 
             {/* Controls */}
-            <div className="flex justify-center gap-4 mb-1">
+            <div className="flex flex-wrap justify-center gap-4 mb-1">
               <select
                 value={sortBy}
                 onChange={handleSortChange}
@@ -350,12 +362,36 @@ export function Study() {
               >
                 Reset
               </button>
+
+              {/* View Mode Toggle */}
+              <div className="flex rounded-lg overflow-hidden border border-gray-300">
+                <button
+                  onClick={() => setViewMode('flashcard')}
+                  className={`px-4 py-2 text-sm transition-colors ${
+                    viewMode === 'flashcard'
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-white hover:bg-gray-100'
+                  }`}
+                >
+                  Cards
+                </button>
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`px-4 py-2 text-sm transition-colors ${
+                    viewMode === 'grid'
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-white hover:bg-gray-100'
+                  }`}
+                >
+                  Grid
+                </button>
+              </div>
             </div>
 
             {/* Stats */}
             <div className="flex justify-center gap-6 mb-1 text-sm text-gray-600">
-              {selectedSet.published_on && (
-                <span>Released: {selectedSet.published_on}</span>
+              {selectedSets.length === 1 && selectedSets[0].published_on && (
+                <span>Released: {selectedSets[0].published_on}</span>
               )}
             </div>
 
@@ -365,7 +401,7 @@ export function Study() {
               <div className="text-center text-red-500">Error: {error}</div>
             ) : displayCards.length === 0 ? (
               <div className="text-center text-gray-500">No cards match filters</div>
-            ) : (
+            ) : viewMode === 'flashcard' ? (
               <div className="flex justify-center">
                 <FlashCard
                   card={currentCard}
@@ -378,6 +414,11 @@ export function Study() {
                   maskBottom={categoryId === CATEGORY_ONE_PIECE}
                 />
               </div>
+            ) : (
+              <CardGrid
+                cards={displayCards}
+                maskBottom={categoryId === CATEGORY_ONE_PIECE}
+              />
             )}
           </>
         )}

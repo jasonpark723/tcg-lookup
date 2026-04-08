@@ -55,6 +55,7 @@ export interface Card {
   rarity: string | null
   image_url: string | null
   price: number | null
+  set_name?: string
 }
 
 // Fetch all sets for a category
